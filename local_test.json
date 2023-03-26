@@ -1,0 +1,18 @@
+{
+	"source": 
+	[
+		{
+			"camera_id": "camera_1",
+			"url": "../sample/reid-video-0201/A-1.mp4",
+			"ip": "",
+			"floor_id": "B1"
+		},
+		{
+			"camera_id": "camera_2",
+			"url": "../sample/reid-video-0201/A-2.mp4",
+			"ip": "",
+			"floor_id": "B1"
+		}
+	],
+	"type": "video_file"
+}
