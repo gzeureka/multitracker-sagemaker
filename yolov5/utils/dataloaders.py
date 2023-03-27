@@ -339,12 +339,13 @@ class LoadImages:
 
 class LoadStreams:
     # YOLOv5 streamloader, i.e. `python detect.py --source 'rtsp://example.com/media.mp4'  # RTSP, RTMP, HTTP streams`
-    def __init__(self, sources='streams.txt', img_size=640, stride=32, auto=True, transforms=None, vid_stride=1):
+    def __init__(self, sources='streams.txt', img_size=640, stride=32, auto=True, transforms=None, vid_stride=1, read_interval=0.2):
         torch.backends.cudnn.benchmark = True  # faster for fixed-size inference
         self.mode = 'stream'
         self.img_size = img_size
         self.stride = stride
         self.vid_stride = vid_stride  # video frame-rate stride
+        self.read_interval = read_interval  # read interval (seconds)
         # sources = Path(sources).read_text().rsplit() if os.path.isfile(sources) else [sources]
         
         n = len(sources)
@@ -399,7 +400,7 @@ class LoadStreams:
                     self.imgs[i] = np.zeros_like(self.imgs[i])
                     cap.open(stream)  # re-open stream if signal was lost
             # change time.sleep to delay frame read!!! zwang
-            time.sleep(0.2)  # wait time
+            time.sleep(self.read_interval)  # wait time
 
     def __iter__(self):
         self.count = -1
