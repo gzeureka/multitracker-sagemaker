@@ -88,7 +88,8 @@ opt = {
         'use_single_file_s3': False,
         'save_to_json_sample': False,
         'vid_stride': 1,
-        'output_s3_path': 's3://abc/'
+        'output_video_s3_path': 's3://abc/',
+        'output_crops_s3_path': 's3://abc/'
     }
 
 # by zwang
@@ -103,8 +104,8 @@ with open("config.yaml", "r") as yaml_file:
 # by zwang, initiate boto3
 s3 = boto3.client('s3', region_name=config['reid_settings']['region'])
                   # aws_access_key_id=CN_S3_AKI, aws_secret_access_key=CN_S3_SAK
-BUCKET_NAME = config['reid_settings']['s3_bucket']
-S3_LOCATION = config['reid_settings']['s3_location']
+# BUCKET_NAME = config['reid_settings']['s3_bucket']
+# S3_LOCATION = config['reid_settings']['s3_location']
 RESULT_ENDPOINT = config['reid_settings']['result_endpoint']
 LOCAL_TEMP_PATH = config['reid_settings']['local_temp_path']
 KINESIS_STREAM_ID = config['reid_settings']['kinesis_stream_id']
@@ -160,10 +161,7 @@ def upload_files(path_local, path_s3):
     """
     # LOGGER.info(path_local)
     # LOGGER.info(path_s3)
-    if not upload_single_file_to_s3_async(path_local, path_s3):
-        LOGGER.error(f'Upload files failed.')
- 
-    LOGGER.info(f'Upload files successful.')
+    upload_single_file_to_s3_async(path_local, path_s3)
 
 def upload_single_file(src_local_path, dest_s3_path):
     """
@@ -172,8 +170,9 @@ def upload_single_file(src_local_path, dest_s3_path):
     :return:
     """
     try:
+        bucket_name, dest_path = parse_s3_path(dest_s3_path)
         with open(src_local_path, 'rb') as f:
-            s3.upload_fileobj(f, BUCKET_NAME, dest_s3_path)
+            s3.upload_fileobj(f, bucket_name, dest_path)
     except Exception as e:
         LOGGER.error(f'Upload data failed. | src: {src_local_path} | dest: {dest_s3_path} | Exception: {e}')
         return False
@@ -250,7 +249,8 @@ def run(
         use_single_file_s3=False,
         use_local_json_file=False, # using 
         save_to_json_sample=False, # save results to json as a sample for re-id,
-        output_s3_path = None # output s3 bucket
+        output_video_s3_path = '', # output s3 bucket,
+        output_crops_s3_path = '' # output s3 bucket
 ):
     global task_list
 
@@ -267,22 +267,33 @@ def run(
 
         LOGGER.info(f'begin to download file from s3 to {tmp_video_path}')
         # check if the file is already downloaded
+        need_to_download = False
         if os.path.exists(tmp_video_path):
             md5 = get_md5_from_s3(source)
-            md5 == get_md5_from_file(tmp_video_path)
-            LOGGER.info(f'file from s3 already downloaded to {tmp_video_path}')
-        
+            if md5 == get_md5_from_file(tmp_video_path):
+                LOGGER.info(f'file from s3 already downloaded to {tmp_video_path}')
+            else:
+                need_to_download = True
+                LOGGER.info(f'file from s3 already downloaded but md5 not match, download again')
+                if download_single_file_from_s3(source, tmp_video_path):
+                    LOGGER.info(f'file from s3 downloaded to {tmp_video_path}')
+                else:
+                    LOGGER.error(f'file from s3 download failed, task failed')
+                    task_list[task_id]['status'] = 'failed'
+                    task_list[task_id]['error'] = 'file from s3 download failed'
+                    return      
         elif download_single_file_from_s3(source, tmp_video_path):
-            source_config = {'source': [{
-                "camera_id": "test-camera",
-                "url": tmp_video_path,
-                "ip": "",
-                "floor_id": "test"}], 'type': 'video_file'}
             LOGGER.info(f'file from s3 downloaded to {tmp_video_path}')
         else:
             LOGGER.error(f'file from s3 download failed')
             task_list[task_id]['status'] = 'failed'
-            return 
+            task_list[task_id]['error'] = 'file from s3 download failed'
+            return
+        source_config = {'source': [{
+            "camera_id": "test-camera",
+            "url": tmp_video_path,
+            "ip": "",
+            "floor_id": "test"}], 'type': 'video_file'}
         
     elif use_local_json_file:
         source = str(source)
@@ -297,11 +308,13 @@ def run(
             source_config = json.loads(data)
         except:
             LOGGER.error('loading json file failed')
+            return
     else:
         try:
             source_config = json.loads(source)
         except:
             LOGGER.error('loading source from request failed')
+            return
 
     if source_config['type'] == 'stream':
         webcam = True
@@ -371,7 +384,7 @@ def run(
 
     for frame_idx, (path, im, im0s, vid_cap, s) in enumerate(dataset):
         total_frame_cnt += 1
-        print('====== %s' % str(total_frame_cnt))
+        LOGGER.info('====== %s for task %s' % (str(total_frame_cnt), task_id))
 
         task_list[task_id]['progress'] = str(int(total_frame_cnt / len(dataset) * 100))
 
@@ -461,9 +474,9 @@ def run(
                     save_folder = datetime.now().strftime("%Y-%m-%d-%H")
                     if not os.path.exists(os.path.join('temp', save_folder)):
                         os.makedirs(os.path.join('temp', save_folder))
-                    best_image_path = os.path.join(S3_LOCATION, save_folder, f'{image_id}-best.jpg')
+                    best_image_path = os.path.join(output_crops_s3_path, save_folder, f'{image_id}-best.jpg')
                     best_image_temp_path = os.path.join('temp', save_folder, f'{image_id}-best.jpg')
-                    large_image_path = os.path.join(S3_LOCATION, save_folder, f'{image_id}-large.jpg')
+                    large_image_path = os.path.join(output_crops_s3_path, save_folder, f'{image_id}-large.jpg')
                     large_image_temp_path = os.path.join('temp', save_folder, f'{image_id}-large.jpg')
                     save_image_from_base64(t.best_image, best_image_temp_path)
                     save_image_from_base64(t.large_image, large_image_temp_path)
@@ -543,10 +556,8 @@ def run(
 
     # save vid_writer file to s3
     for vid in vid_writer:
-        # change needed! only include single video file
-        vid.release()
         # video_path = vid.filename
-        upload_single_file(save_video_path, os.path.join(output_s3_path, task_id + '.mp4'))
+        upload_single_file(save_video_path, os.path.join(output_video_s3_path, task_id + '.mp4'))
 
     # save all results to a numpy file in root
     if save_to_numpy_sample:
@@ -557,9 +568,9 @@ def run(
         with open(local_tmp_json_path, 'w') as outfile:
             json.dump(npy_file, outfile)
         # move json file to s3
-        upload_single_file(local_tmp_json_path, os.path.join(output_s3_path, task_id + '.json'))
+        upload_single_file(local_tmp_json_path, os.path.join(output_video_s3_path, task_id + '.json'))
 
-    task_list[task_id] = {'status': 'done', 'output_path': output_s3_path, 'finished_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+    task_list[task_id] = {'status': 'done', 'output_path': output_video_s3_path, 'finished_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
     return task_id
     # Print results
     # t = tuple(x / seen * 1E3 for x in dt)  # speeds per image
@@ -622,7 +633,8 @@ def invocation():
     opt['vid_stride'] = int(data.get('vid_stride', 1))
     opt['tracking_method'] = data.get('tracking_method', 'bytetrack')
     opt['use_single_file_s3'] = bool(data.get('use_single_file_s3', False))
-    opt['output_s3_path'] = data.get('output_s3_path', 's3://sagemaker-us-east-1-123456789012/track')
+    opt['output_video_s3_path'] = data.get('output_video_s3_path', 's3://sagemaker-us-east-1-123456789012/track')
+    opt['output_crops_s3_path'] = data.get('output_crops_s3_path', 's3://sagemaker-us-east-1-123456789012/track')
     opt['save_vid'] = bool(data.get('save_vid', False))
     opt['save_to_json_sample'] = bool(data.get('save_to_json_sample', False))
     LOGGER.info('running new request task')
