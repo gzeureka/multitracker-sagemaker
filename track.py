@@ -354,7 +354,7 @@ def run(
     # Dataloader
     LOGGER.info(f'loading streams or images from {source_config["source"]}')
     if webcam:
-        show_vid = check_imshow()
+        # show_vid = check_imshow()
         dataset = LoadStreams([i['url'] for i in source_config['source']], img_size=imgsz, stride=stride, auto=pt, vid_stride=vid_stride)
         nr_sources = len(dataset)
     else:
