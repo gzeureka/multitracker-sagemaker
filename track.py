@@ -89,7 +89,8 @@ opt = {
         'save_to_json_sample': False,
         'vid_stride': 1,
         'output_video_s3_path': 's3://abc/',
-        'output_crops_s3_path': 's3://abc/'
+        'output_crops_s3_path': 's3://abc/',
+        'read_interval': 0.2
     }
 
 # by zwang
@@ -250,7 +251,8 @@ def run(
         use_local_json_file=False, # using 
         save_to_json_sample=False, # save results to json as a sample for re-id,
         output_video_s3_path = '', # output s3 bucket,
-        output_crops_s3_path = '' # output s3 bucket
+        output_crops_s3_path = '', # output s3 bucket
+        read_interval=0.2 # read interval for video
 ):
     global task_list
 
@@ -355,7 +357,7 @@ def run(
     LOGGER.info(f'loading streams or images from {source_config["source"]}')
     if webcam:
         # show_vid = check_imshow()
-        dataset = LoadStreams([i['url'] for i in source_config['source']], img_size=imgsz, stride=stride, auto=pt, vid_stride=vid_stride)
+        dataset = LoadStreams([i['url'] for i in source_config['source']], img_size=imgsz, stride=stride, auto=pt, vid_stride=vid_stride, read_interval=read_interval)
         nr_sources = len(dataset)
     else:
         dataset = LoadImages([i['url'] for i in source_config['source']], img_size=imgsz, stride=stride, auto=pt)
@@ -637,6 +639,7 @@ def invocation():
     opt['output_crops_s3_path'] = data.get('output_crops_s3_path', 's3://sagemaker-us-east-1-123456789012/track')
     opt['save_vid'] = bool(data.get('save_vid', False))
     opt['save_to_json_sample'] = bool(data.get('save_to_json_sample', False))
+    opt['read_interval'] = float(data.get('read_interval', 0.2))
     LOGGER.info('running new request task')
     # task_id = run(**opt)
     # run run function in thread
