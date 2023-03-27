@@ -1,4 +1,5 @@
-./temp/*
-./runs/*
-./tmp_files/*
+temp/*
+runs/*
+tmp_files/*
 *.mp4
+*.pyc 

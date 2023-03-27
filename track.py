@@ -2,6 +2,7 @@ import argparse
 
 import os
 import sys
+import time
 import base64
 import threading
 # import time
@@ -52,18 +53,16 @@ from trackers.multi_tracker_zoo import create_tracker
 
 global task_list
 task_list = {}
-
+yolo_weights = ['./weights/yolov5m.pt']
+reid_weights = './weights/osnet_x0_25_market1501.pt'
 # default options
 opt = {
-        'yolo_weights': ['./weights/yolov5m.pt'],
-        'reid_weights': './weights/osnet_x0_25_market1501.pt',
         'tracking_method': 'bytetrack',
         'source': './local_test.json',
         'imgsz': [640, 640],
         'conf_thres': 0.5,
         'iou_thres': 0.5,
         'max_det': 1000,
-        'device': '',
         'show_vid': False,
         'save_txt': False,
         'save_conf': False,
@@ -82,8 +81,6 @@ opt = {
         'hide_labels': False,
         'hide_conf': False,
         'hide_class': False,
-        'half': False,
-        'dnn': False,
         'use_local_json_file': True,
         'use_single_file_s3': False,
         'save_to_json_sample': False,
@@ -94,6 +91,7 @@ opt = {
     }
 
 # by zwang
+config = {}
 with open("config.yaml", "r") as yaml_file:
     try:
         LOGGER.info('loading config yaml...')
@@ -105,11 +103,9 @@ with open("config.yaml", "r") as yaml_file:
 # by zwang, initiate boto3
 s3 = boto3.client('s3', region_name=config['reid_settings']['region'])
                   # aws_access_key_id=CN_S3_AKI, aws_secret_access_key=CN_S3_SAK
-# BUCKET_NAME = config['reid_settings']['s3_bucket']
-# S3_LOCATION = config['reid_settings']['s3_location']
-RESULT_ENDPOINT = config['reid_settings']['result_endpoint']
+# RESULT_ENDPOINT = config['reid_settings']['result_endpoint']
+# KINESIS_STREAM_ID = config['reid_settings']['kinesis_stream_id']
 LOCAL_TEMP_PATH = config['reid_settings']['local_temp_path']
-KINESIS_STREAM_ID = config['reid_settings']['kinesis_stream_id']
 
 # kinesis_client=boto3.client('kinesis', region_name=config['reid_settings']['region'])
 npy_file = []
@@ -188,16 +184,16 @@ def upload_single_file_to_s3_async(src_local_path, dest_s3_path):
     return
 
 # to do!!!! ascyronize the function to avoid blockage
-def put_to_kinesis(track_id, max_score, max_size, best_image, large_image, frame_idx, current_time):
-    kinesis_client.put_record(StreamName=KINESIS_STREAM_ID, Data=json.dumps({
-        'track_id': track_id, 
-        'max_score': str(max_score), 
-        'max_size': str(max_size), 
-        'best_image': best_image, 
-        'large_image': large_image,
-        'frame_idx': frame_idx,
-        'current_time': current_time
-    }), PartitionKey="partitionkey")
+# def put_to_kinesis(track_id, max_score, max_size, best_image, large_image, frame_idx, current_time):
+#     kinesis_client.put_record(StreamName=KINESIS_STREAM_ID, Data=json.dumps({
+#         'track_id': track_id, 
+#         'max_score': str(max_score), 
+#         'max_size': str(max_size), 
+#         'best_image': best_image, 
+#         'large_image': large_image,
+#         'frame_idx': frame_idx,
+#         'current_time': current_time
+#     }), PartitionKey="partitionkey")
 
 def save_image_from_base64(image_base64_string, img_path):
     image_binary_data = base64_string_to_numpy_image(image_base64_string)
@@ -213,18 +209,24 @@ def base64_string_to_numpy_image(base64_string):
 
 track_data = {}
 
+dnn = False,  # use OpenCV DNN for ONNX inference
+device = select_device('')
+half = False  # use FP16 half-precision inference
+
+# Load model
+LOGGER.info(f'loading yolo model from {yolo_weights}')
+model = DetectMultiBackend(yolo_weights, device=device, dnn=dnn, data=None, fp16=half)
+stride, names, pt = model.stride, model.names, model.pt
+
 @torch.no_grad()
 def run(
         task_id='',
         source='0',
-        yolo_weights=WEIGHTS / 'yolov5m.pt',  # model.pt path(s),
-        reid_weights=WEIGHTS / 'osnet_x0_25_msmt17.pt',  # model.pt path,
         tracking_method='strongsort',
         imgsz=(640, 640),  # inference size (height, width)
         conf_thres=0.25,  # confidence threshold
         iou_thres=0.45,  # NMS IOU threshold
         max_det=1000,  # maximum detections per image
-        device='',  # cuda device, i.e. 0 or 0,1,2,3 or cpu
         show_vid=False,  # show results
         save_txt=False,  # save results to *.txt
         save_conf=False,  # save confidences in --save-txt labels
@@ -243,8 +245,6 @@ def run(
         hide_labels=False,  # hide labels
         hide_conf=False,  # hide confidences
         hide_class=False,  # hide IDs
-        half=False,  # use FP16 half-precision inference
-        dnn=False,  # use OpenCV DNN for ONNX inference
         vid_stride=1,  # video frame-rate stride,
         save_to_numpy_sample=False, # save results to numpy as a sample for re-id
         use_single_file_s3=False,
@@ -255,6 +255,8 @@ def run(
         read_interval=0.2 # read interval for video
 ):
     global task_list
+
+    start_processing_time = time.time()
 
     # check if file need to be downloaded from s3
     if use_single_file_s3:
@@ -323,7 +325,7 @@ def run(
         is_url = True
         is_file = False
     elif source_config['type'] == 'video_file':
-        webcam = True
+        webcam = False
         is_url = False
         is_file = True
     else:
@@ -346,11 +348,6 @@ def run(
     save_dir = increment_path(Path(project) / exp_name, exist_ok=exist_ok)  # increment run
     (save_dir / 'tracks' if save_txt else save_dir).mkdir(parents=True, exist_ok=True)  # make dir
 
-    # Load model
-    LOGGER.info(f'loading yolo model from {yolo_weights}')
-    device = select_device(device)
-    model = DetectMultiBackend(yolo_weights, device=device, dnn=dnn, data=None, fp16=half)
-    stride, names, pt = model.stride, model.names, model.pt
     imgsz = check_img_size(imgsz, s=stride)  # check image size
 
     # Dataloader
@@ -360,7 +357,7 @@ def run(
         dataset = LoadStreams([i['url'] for i in source_config['source']], img_size=imgsz, stride=stride, auto=pt, vid_stride=vid_stride, read_interval=read_interval)
         nr_sources = len(dataset)
     else:
-        dataset = LoadImages([i['url'] for i in source_config['source']], img_size=imgsz, stride=stride, auto=pt)
+        dataset = LoadImages([i['url'] for i in source_config['source']], img_size=imgsz, stride=stride, auto=pt, vid_stride=vid_stride)
         nr_sources = 1
 
     vid_path, vid_writer, txt_path = [None] * nr_sources, [None] * nr_sources, [None] * nr_sources
@@ -556,6 +553,8 @@ def run(
 
             prev_frames[i] = curr_frames[i]
 
+    end_processing_time = time.time()
+    LOGGER.info('Total processing time: {:.3f}s'.format(end_processing_time - start_processing_time))
     # save vid_writer file to s3
     for vid in vid_writer:
         # video_path = vid.filename
@@ -593,7 +592,6 @@ def parse_opt():
     parser.add_argument('--conf-thres', type=float, default=0.5, help='confidence threshold')
     parser.add_argument('--iou-thres', type=float, default=0.5, help='NMS IoU threshold')
     parser.add_argument('--max-det', type=int, default=1000, help='maximum detections per image')
-    parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--show-vid', action='store_true', help='display tracking video results')
     parser.add_argument('--save-txt', action='store_true', help='save results to *.txt')
     parser.add_argument('--save-conf', action='store_true', help='save confidences in --save-txt labels')
@@ -613,8 +611,6 @@ def parse_opt():
     parser.add_argument('--hide-labels', default=False, action='store_true', help='hide labels')
     parser.add_argument('--hide-conf', default=False, action='store_true', help='hide confidences')
     parser.add_argument('--hide-class', default=False, action='store_true', help='hide IDs')
-    parser.add_argument('--half', action='store_true', help='use FP16 half-precision inference')
-    parser.add_argument('--dnn', action='store_true', help='use OpenCV DNN for ONNX inference')
     parser.add_argument('--vid-stride', type=int, default=30, help='video frame-rate stride')
     parser.add_argument('--save-to-numpy-sample', default=False, action='store_true', help='save tracks to a numpy file for further testing')
     opt = parser.parse_args()

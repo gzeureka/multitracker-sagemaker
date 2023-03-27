@@ -250,11 +250,10 @@ class LoadImages:
         #     else:
         #         raise FileNotFoundError(f'{p} does not exist')
 
-        print(files)
         images = [x for x in files if x.split('.')[-1].lower() in IMG_FORMATS]
         videos = [x for x in files if x.split('.')[-1].lower() in VID_FORMATS]
         ni, nv = len(images), len(videos)
-        print(videos)
+        
         self.img_size = img_size
         self.stride = stride
         self.files = images + videos
