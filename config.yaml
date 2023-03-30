@@ -1,14 +1,3 @@
 reid_settings:
-  # s3_bucket: 'test-bucket-zt'
-  # s3_location: 'track-test/'
-  # result_endpoint: 'http://the-address-where-u-want-to-push-results-to/abc'
   region: 'us-west-2'
   local_temp_path: './temp'
-  # kinesis_stream_id: 'reid-digest'
-iot_settings:
-  key: 
-  cert: 
-  port: 
-  client_id: 
-  count: 
-  is_ci: 

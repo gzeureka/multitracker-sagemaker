@@ -55,40 +55,6 @@ global task_list
 task_list = {}
 yolo_weights = ['./weights/yolov5m.pt']
 reid_weights = './weights/osnet_x0_25_market1501.pt'
-# default options
-opt = {
-        'tracking_method': 'bytetrack',
-        'source': './local_test.json',
-        'imgsz': [640, 640],
-        'conf_thres': 0.5,
-        'iou_thres': 0.5,
-        'max_det': 1000,
-        'show_vid': False,
-        'save_txt': False,
-        'save_conf': False,
-        'save_crop': False,
-        'save_vid': False,
-        'nosave': False,
-        'classes': [0],
-        'agnostic_nms': False,
-        'augment': False,
-        'visualize': False,
-        'update': False,
-        'project': 'runs/track',
-        'name': 'exp',
-        'exist_ok': False,
-        'line_thickness': 2,
-        'hide_labels': False,
-        'hide_conf': False,
-        'hide_class': False,
-        'use_local_json_file': True,
-        'use_single_file_s3': False,
-        'save_to_json_sample': False,
-        'vid_stride': 1,
-        'output_video_s3_path': 's3://abc/',
-        'output_crops_s3_path': 's3://abc/',
-        'read_interval': 0.2
-    }
 
 # by zwang
 config = {}
@@ -219,6 +185,7 @@ model = DetectMultiBackend(yolo_weights, device=device, dnn=dnn, data=None, fp16
 stride, names, pt = model.stride, model.names, model.pt
 
 @torch.no_grad()
+# accept anyother parameters
 def run(
         task_id='',
         source='0',
@@ -247,12 +214,13 @@ def run(
         hide_class=False,  # hide IDs
         vid_stride=1,  # video frame-rate stride,
         save_to_numpy_sample=False, # save results to numpy as a sample for re-id
-        use_single_file_s3=False,
+        use_single_file_s3=False, # using single file from s3
         use_local_json_file=False, # using 
         save_to_json_sample=False, # save results to json as a sample for re-id,
         output_video_s3_path = '', # output s3 bucket,
         output_crops_s3_path = '', # output s3 bucket
-        read_interval=0.2 # read interval for video
+        read_interval=0.2, # read interval for video
+        upload_to_s3=True # upload the output video, json to s3
 ):
     global task_list
 
@@ -270,14 +238,13 @@ def run(
         # get md5 of file from s3
 
         LOGGER.info(f'begin to download file from s3 to {tmp_video_path}')
+
         # check if the file is already downloaded
-        need_to_download = False
         if os.path.exists(tmp_video_path):
             md5 = get_md5_from_s3(source)
             if md5 == get_md5_from_file(tmp_video_path):
                 LOGGER.info(f'file from s3 already downloaded to {tmp_video_path}')
             else:
-                need_to_download = True
                 LOGGER.info(f'file from s3 already downloaded but md5 not match, download again')
                 if download_single_file_from_s3(source, tmp_video_path):
                     LOGGER.info(f'file from s3 downloaded to {tmp_video_path}')
@@ -315,7 +282,11 @@ def run(
             return
     else:
         try:
-            source_config = json.loads(source)
+            source_config = {'source': [{
+            "camera_id": "test-camera",
+            "url": source,
+            "ip": "",
+            "floor_id": "test"}], 'type': 'video_file'}
         except:
             LOGGER.error('loading source from request failed')
             return
@@ -353,12 +324,12 @@ def run(
     # Dataloader
     LOGGER.info(f'loading streams or images from {source_config["source"]}')
     if webcam:
-        # show_vid = check_imshow()
+        show_vid = check_imshow()
         dataset = LoadStreams([i['url'] for i in source_config['source']], img_size=imgsz, stride=stride, auto=pt, vid_stride=vid_stride, read_interval=read_interval)
-        nr_sources = len(dataset)
     else:
         dataset = LoadImages([i['url'] for i in source_config['source']], img_size=imgsz, stride=stride, auto=pt, vid_stride=vid_stride)
-        nr_sources = 1
+    
+    nr_sources = len(dataset)
 
     vid_path, vid_writer, txt_path = [None] * nr_sources, [None] * nr_sources, [None] * nr_sources
 
@@ -380,6 +351,7 @@ def run(
     curr_frames, prev_frames = [None] * nr_sources, [None] * nr_sources
     
     total_frame_cnt = 0
+    trajectory = {}
 
     for frame_idx, (path, im, im0s, vid_cap, s) in enumerate(dataset):
         total_frame_cnt += 1
@@ -479,8 +451,9 @@ def run(
                     large_image_temp_path = os.path.join('temp', save_folder, f'{image_id}-large.jpg')
                     save_image_from_base64(t.best_image, best_image_temp_path)
                     save_image_from_base64(t.large_image, large_image_temp_path)
-                    upload_files(best_image_temp_path, best_image_path)
-                    upload_files(large_image_temp_path, large_image_path)
+                    if upload_to_s3:
+                        upload_files(best_image_temp_path, best_image_path)
+                        upload_files(large_image_temp_path, large_image_path)
                     npy_file.append({'track_id':t.track_id, 'max_score':str(t.max_score), 'max_size':str(t.max_size),
                                      'best_image':best_image_path, 'large_image':large_image_path, 'frame_idx':frame_idx, 
                                      'start_time': t.start_time, 'end_time':datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 'trajectory': t.trajectory})
@@ -517,10 +490,23 @@ def run(
                         if save_vid or save_crop or show_vid:  # Add bbox to image
                             c = int(cls)  # integer class
                             id = str(id)  # integer id
-                            label = None if hide_labels else (f'{id} {names[c]}' if hide_conf else \
+                            label = None if hide_labels else (f'{id[:5]} {names[c]}' if hide_conf else \
                                 (f'{id} {conf:.2f}' if hide_class else f'{id} {names[c]} {conf:.2f}'))
                             annotator.box_label(bboxes, label, color=colors(c, True))
-
+                            center = ((int(bboxes[0]) + int(bboxes[2])) // 2, int(bboxes[3]))
+                            if id not in trajectory:
+                                trajectory[id] = []
+                            trajectory[id].append(center)
+                            for f, i1 in enumerate(trajectory[id]):
+                                if trajectory[id][f] is None or f == 0:
+                                    continue
+                                # thickness = int(np.sqrt(1000/float(f+10))*0.3)
+                                thickness = 5
+                                try:
+                                    cv2.line(im0, trajectory[id][f - 1], trajectory[id][f], (0, 0, 255), thickness)
+                                except:
+                                    pass
+                                
                 # LOGGER.info(f'{s}Done. yolo:({t3 - t2:.3f}s), {tracking_method}:({t5 - t4:.3f}s)')
 
             else:
@@ -555,10 +541,12 @@ def run(
 
     end_processing_time = time.time()
     LOGGER.info('Total processing time: {:.3f}s'.format(end_processing_time - start_processing_time))
+    
     # save vid_writer file to s3
     for vid in vid_writer:
         # video_path = vid.filename
-        upload_single_file(save_video_path, os.path.join(output_video_s3_path, task_id + '.mp4'))
+        if upload_to_s3:
+            upload_single_file(save_video_path, os.path.join(output_video_s3_path, task_id + '.mp4'))
 
     # save all results to a numpy file in root
     if save_to_numpy_sample:
@@ -569,7 +557,8 @@ def run(
         with open(local_tmp_json_path, 'w') as outfile:
             json.dump(npy_file, outfile)
         # move json file to s3
-        upload_single_file(local_tmp_json_path, os.path.join(output_video_s3_path, task_id + '.json'))
+        if upload_to_s3:
+            upload_single_file(local_tmp_json_path, os.path.join(output_video_s3_path, task_id + '.json'))
 
     task_list[task_id] = {'status': 'done', 'output_path': output_video_s3_path, 'finished_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
     return task_id
@@ -584,38 +573,43 @@ def run(
 
 def parse_opt():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--yolo-weights', nargs='+', type=Path, default=WEIGHTS / 'yolov5m.pt', help='model.pt path(s)')
-    parser.add_argument('--reid-weights', type=Path, default=WEIGHTS / 'osnet_x0_25_msmt17.pt')
-    parser.add_argument('--tracking-method', type=str, default='strongsort', help='strongsort, ocsort, bytetrack')
+    
+    parser.add_argument('--local-mode', default=False, action='store_true', help='update all models')
+    # following arguments only works in local mode is True
+    parser.add_argument('--show-vid', default=False, action='store_true', help='display tracking video results')
     parser.add_argument('--source', type=str, default='0', help='file/dir/URL/glob, 0 for webcam')  
-    parser.add_argument('--imgsz', '--img', '--img-size', nargs='+', type=int, default=[640], help='inference size h,w')
-    parser.add_argument('--conf-thres', type=float, default=0.5, help='confidence threshold')
-    parser.add_argument('--iou-thres', type=float, default=0.5, help='NMS IoU threshold')
-    parser.add_argument('--max-det', type=int, default=1000, help='maximum detections per image')
-    parser.add_argument('--show-vid', action='store_true', help='display tracking video results')
-    parser.add_argument('--save-txt', action='store_true', help='save results to *.txt')
-    parser.add_argument('--save-conf', action='store_true', help='save confidences in --save-txt labels')
-    parser.add_argument('--save-crop', action='store_true', help='save cropped prediction boxes')
-    parser.add_argument('--save-vid', action='store_true', help='save video tracking results')
-    parser.add_argument('--nosave', action='store_true', help='do not save images/videos')
+    # parser.add_argument('--yolo-weights', nargs='+', type=Path, default=WEIGHTS / 'yolov5m.pt', help='model.pt path(s)')
+    # parser.add_argument('--reid-weights', type=Path, default=WEIGHTS / 'osnet_x0_25_msmt17.pt')
+    # parser.add_argument('--tracking-method', type=str, default='strongsort', help='strongsort, ocsort, bytetrack')
+    # parser.add_argument('--imgsz', '--img', '--img-size', nargs='+', type=int, default=[640], help='inference size h,w')
+    # parser.add_argument('--conf-thres', type=float, default=0.5, help='confidence threshold')
+    # parser.add_argument('--iou-thres', type=float, default=0.5, help='NMS IoU threshold')
+    # parser.add_argument('--max-det', type=int, default=1000, help='maximum detections per image')
+    # parser.add_argument('--save-txt', action='store_true', help='save results to *.txt')
+    # parser.add_argument('--save-conf', action='store_true', help='save confidences in --save-txt labels')
+    # parser.add_argument('--save-crop', action='store_true', help='save cropped prediction boxes')
+    # parser.add_argument('--save-vid', action='store_true', help='save video tracking results')
+    # parser.add_argument('--nosave', action='store_true', help='do not save images/videos')
     # class 0 is person, 1 is bycicle, 2 is car... 79 is oven
-    parser.add_argument('--classes', nargs='+', type=int, help='filter by class: --classes 0, or --classes 0 2 3')
-    parser.add_argument('--agnostic-nms', action='store_true', help='class-agnostic NMS')
-    parser.add_argument('--augment', action='store_true', help='augmented inference')
-    parser.add_argument('--visualize', action='store_true', help='visualize features')
-    parser.add_argument('--update', action='store_true', help='update all models')
-    parser.add_argument('--project', default=ROOT / 'runs/track', help='save results to project/name')
-    parser.add_argument('--name', default='exp', help='save results to project/name')
-    parser.add_argument('--exist-ok', action='store_true', help='existing project/name ok, do not increment')
-    parser.add_argument('--line-thickness', default=2, type=int, help='bounding box thickness (pixels)')
-    parser.add_argument('--hide-labels', default=False, action='store_true', help='hide labels')
-    parser.add_argument('--hide-conf', default=False, action='store_true', help='hide confidences')
-    parser.add_argument('--hide-class', default=False, action='store_true', help='hide IDs')
-    parser.add_argument('--vid-stride', type=int, default=30, help='video frame-rate stride')
-    parser.add_argument('--save-to-numpy-sample', default=False, action='store_true', help='save tracks to a numpy file for further testing')
+    # parser.add_argument('--classes', nargs='+', type=int, help='filter by class: --classes 0, or --classes 0 2 3')
+    # parser.add_argument('--agnostic-nms', action='store_true', help='class-agnostic NMS')
+    # parser.add_argument('--augment', action='store_true', help='augmented inference')
+    # parser.add_argument('--visualize', action='store_true', help='visualize features')
+    # parser.add_argument('--update', action='store_true', help='update all models')
+    # parser.add_argument('--project', default=ROOT / 'runs/track', help='save results to project/name')
+    # parser.add_argument('--name', default='exp', help='save results to project/name')
+    # parser.add_argument('--exist-ok', action='store_true', help='existing project/name ok, do not increment')
+    # parser.add_argument('--line-thickness', default=2, type=int, help='bounding box thickness (pixels)')
+    # parser.add_argument('--hide-labels', default=False, action='store_true', help='hide labels')
+    # parser.add_argument('--hide-conf', default=False, action='store_true', help='hide confidences')
+    # parser.add_argument('--hide-class', default=False, action='store_true', help='hide IDs')
+    # parser.add_argument('--vid-stride', type=int, default=30, help='video frame-rate stride')
+    # parser.add_argument('--save-to-numpy-sample', default=False, action='store_true', help='save tracks to a numpy file for further testing')
     opt = parser.parse_args()
-    opt.imgsz *= 2 if len(opt.imgsz) == 1 else 1  # expand
+    # opt.imgsz *= 2 if len(opt.imgsz) == 1 else 1  # expand
     print_args(vars(opt))
+    # namespace to dict
+    opt = vars(opt)
     return opt
 
 @app.route('/invocation', methods=["POST"])
@@ -637,6 +631,7 @@ def invocation():
     opt['save_to_json_sample'] = bool(data.get('save_to_json_sample', False))
     opt['read_interval'] = float(data.get('read_interval', 0.2))
     LOGGER.info('running new request task')
+
     # task_id = run(**opt)
     # run run function in thread
     task_id = str(uuid4())
@@ -657,8 +652,57 @@ def status(task_id):
 def ping():
     return "pong"
 
+# default options
+default_server_opt = {
+        'tracking_method': 'bytetrack',
+        'source': './local_test.json',
+        'imgsz': [640, 640],
+        'conf_thres': 0.5,
+        'iou_thres': 0.5,
+        'max_det': 1000,
+        'show_vid': False,
+        'save_txt': False,
+        'save_conf': False,
+        'save_crop': False,
+        'save_vid': False,
+        'nosave': False,
+        'classes': [0],
+        'agnostic_nms': False,
+        'augment': False,
+        'visualize': False,
+        'update': False,
+        'project': 'runs/track',
+        'name': 'exp',
+        'exist_ok': False,
+        'line_thickness': 2,
+        'hide_labels': False,
+        'hide_conf': False,
+        'hide_class': False,
+        'use_local_json_file': True,
+        'use_single_file_s3': False,
+        'save_to_json_sample': False,
+        'vid_stride': 1,
+        'output_video_s3_path': 's3://abc/',
+        'output_crops_s3_path': 's3://abc/',
+        'read_interval': 0.2, 
+        'upload_to_s3': True
+    }
+opt = parse_opt()
+
 if __name__ == "__main__":
-    # opt = parse_opt()
+    
     check_requirements(requirements=ROOT / 'requirements.txt', exclude=('tensorboard', 'thop'))
-    # run(**opt)
-    app.run(host='0.0.0.0', port=8080, debug=True)
+
+    if opt['local_mode'] == True:
+        # delete key from dictionary
+        default_server_opt['show_vid'] = opt['show_vid']
+        default_server_opt['source'] = opt['source']
+        default_server_opt['upload_to_s3'] = False
+        default_server_opt['use_single_file_s3'] = True
+        default_server_opt['use_local_json_file'] = False
+        default_server_opt['use_single_file_s3'] = False
+        opt = default_server_opt
+        run(**opt)
+    else:
+        opt = default_server_opt
+        app.run(host='0.0.0.0', port=8080, debug=True)
