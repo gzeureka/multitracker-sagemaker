@@ -5,7 +5,11 @@ config.yaml file notes the configurations for reid on cloud, including [TBD]
 
 ## Two inference modes:
 ### Local Test
-In this mode, track.py does people tracking on an local file and gives output (mp4, json) in ./runs/exp[last epoch] and visualize bounding boxes and tracks
+In this mode, track.py does people tracking on an local file and gives output (mp4, json) in ./runs/exp[last epoch] and visualize bounding boxes and tracks. First, install requirements.
+```
+pip install -r requirements.txt
+```
+then start local inference
 ```
 python track.py --local-mode  --show-vid  --source abc.mp4
 ```
