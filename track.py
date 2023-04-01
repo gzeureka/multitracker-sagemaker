@@ -3,6 +3,7 @@ import argparse
 import os
 import sys
 import time
+import random
 import base64
 import threading
 # import time
@@ -302,6 +303,7 @@ def run(
     else:
         assert "source type not supported"
 
+    camera_list = [a['camera_id'] for a in source_config['source']]
     task_list[task_id] = {'status': 'downloaded', 'progress': '0', 'seen': 0}
     # is_url = source.lower().startswith(('rtsp://', 'rtmp://', 'http://', 'https://'))
     # webcam = source.isnumeric() or source.endswith('.txt') or (is_url and not is_file)
@@ -354,6 +356,7 @@ def run(
     trajectory = {}
 
     for frame_idx, (path, im, im0s, vid_cap, s) in enumerate(dataset):
+        
         total_frame_cnt += 1
         LOGGER.info('====== %s for task %s' % (str(total_frame_cnt), task_id))
 
@@ -456,7 +459,8 @@ def run(
                         upload_files(large_image_temp_path, large_image_path)
                     npy_file.append({'track_id':t.track_id, 'max_score':str(t.max_score), 'max_size':str(t.max_size),
                                      'best_image':best_image_path, 'large_image':large_image_path, 'frame_idx':frame_idx, 
-                                     'start_time': t.start_time, 'end_time':datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 'trajectory': t.trajectory})
+                                     'start_time': t.start_time, 'end_time':datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 
+                                     'trajectory': t.trajectory, 'camera_id': camera_list[i]})
 
                     ################################
                     # add post function here/zwang #
@@ -495,15 +499,17 @@ def run(
                             annotator.box_label(bboxes, label, color=colors(c, True))
                             center = ((int(bboxes[0]) + int(bboxes[2])) // 2, int(bboxes[3]))
                             if id not in trajectory:
-                                trajectory[id] = []
-                            trajectory[id].append(center)
-                            for f, i1 in enumerate(trajectory[id]):
-                                if trajectory[id][f] is None or f == 0:
+                                # generate a random color for this id
+                                color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+                                trajectory[id] = {'color': color, 'trajectory': []} 
+                            trajectory[id]['trajectory'].append(center)
+                            for f, i1 in enumerate(trajectory[id]['trajectory']):
+                                if trajectory[id]['trajectory'][f] is None or f == 0:
                                     continue
                                 # thickness = int(np.sqrt(1000/float(f+10))*0.3)
                                 thickness = 5
                                 try:
-                                    cv2.line(im0, trajectory[id][f - 1], trajectory[id][f], (0, 0, 255), thickness)
+                                    cv2.line(im0, trajectory[id]['trajectory'][f - 1], trajectory[id]['trajectory'][f], trajectory[id]['color'], thickness)
                                 except:
                                     pass
                                 
@@ -576,6 +582,7 @@ def parse_opt():
     
     parser.add_argument('--local-mode', default=False, action='store_true', help='update all models')
     parser.add_argument('--use-local-json-file', default=False, action='store_true', help='use local json file')
+    parser.add_argument('--save-to-numpy-sample', default=False, action='store_true', help='save trajectory to npy file')
     # following arguments only works in local mode is True
     parser.add_argument('--show-vid', default=False, action='store_true', help='display tracking video results')
     parser.add_argument('--source', type=str, default='0', help='file/dir/URL/glob, 0 for webcam')  
@@ -619,7 +626,7 @@ def invocation():
 
     data = request.form.to_dict()
     opt.update(data)
-    opt['conf_thres'] = float(data.get('conf_thres', 0.25))
+    opt['conf_thres'] = float(data.get('conf_thres', 0.55))
     opt['iou_thres'] = float(data.get('iou_thres', 0.45))
     opt['use_local_json_file'] = bool(data.get('use_local_json_file', False))
     opt['source'] = data.get('source', './local_test.json')
@@ -700,7 +707,9 @@ if __name__ == "__main__":
         default_server_opt['source'] = opt['source']
         default_server_opt['upload_to_s3'] = False
         default_server_opt['use_local_json_file'] = opt['use_local_json_file']
+        default_server_opt['save_to_numpy_sample'] = opt['save_to_numpy_sample']
         default_server_opt['use_single_file_s3'] = False
+        default_server_opt['task_id'] = 'local_task'
         opt = default_server_opt
         run(**opt)
     else:
