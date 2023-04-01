@@ -575,6 +575,7 @@ def parse_opt():
     parser = argparse.ArgumentParser()
     
     parser.add_argument('--local-mode', default=False, action='store_true', help='update all models')
+    parser.add_argument('--use-local-json-file', default=False, action='store_true', help='use local json file')
     # following arguments only works in local mode is True
     parser.add_argument('--show-vid', default=False, action='store_true', help='display tracking video results')
     parser.add_argument('--source', type=str, default='0', help='file/dir/URL/glob, 0 for webcam')  
@@ -698,7 +699,7 @@ if __name__ == "__main__":
         default_server_opt['show_vid'] = opt['show_vid']
         default_server_opt['source'] = opt['source']
         default_server_opt['upload_to_s3'] = False
-        default_server_opt['use_local_json_file'] = False
+        default_server_opt['use_local_json_file'] = opt['use_local_json_file']
         default_server_opt['use_single_file_s3'] = False
         opt = default_server_opt
         run(**opt)
