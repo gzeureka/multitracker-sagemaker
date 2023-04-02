@@ -424,7 +424,8 @@ def run(
                 # pass detections to strongsort
                 t4 = time_sync()
                 outputs[i], removed_tracks = tracker_list[i].update(det.cpu(), im0)
-                # zwang, save detection results
+
+                # deduplicate outputs, mark for finding out reasons why it happens
                 for out in outputs[i]:
                     if out[4] in track_data.keys():
                         # xyxy, frame id/timestamp, camera id
@@ -432,18 +433,9 @@ def run(
                     else:
                         # initiate new track
                         track_data[out[4]] = [[out[0:4], frame_idx, i]]
-                        # filepath = os.path.join(LOCAL_TEMP_PATH, f'{out[4]}.jpg')
-                        # save_one_box(out[0:4], imc, file=Path(filepath), BGR=True)
-                        # path_s3 = os.path.join(S3_LOCATION, f'{out[4]}.jpg')
-                        # upload_files(filepath, path_s3)
 
                 # zwang, send track to endpoint when removed
                 for t in removed_tracks:
-                    # print('------------ removed')
-                    # {'ShardId': 'shardId-000000000001', 'SequenceNumber': '49637551416675302900361177921833649890934530126563508242', 'ResponseMetadata': {'RequestId': 'd5e21bdb-dd6d-455a-89b6-2cc9042594c0', 'HTTPStatusCode': 200, 'HTTPHeaders': {'x-amzn-requestid': 'd5e21bdb-dd6d-455a-89b6-2cc9042594c0', 'x-amz-id-2': 'FkjzFUpmWGtTPoPOf2Eg1ZpCQgoX8u/bOHrRyROf3OCndHWlbaT9lgYvBF+tRPyNNm072ZrvmVTOEf2Kee+j9FN4x+TShPKA', 'date': 'Wed, 01 Feb 2023 09:45:54 GMT', 'content-type': 'application/x-amz-json-1.1', 'content-length': '110'}, 'RetryAttempts': 0}}
-                    # put_to_kinesis(track_id=t.track_id, max_score=str(t.max_score), max_size=str(t.max_size),
-                    #                  best_image=t.best_image, large_image=t.large_image, frame_idx=frame_idx, 
-                    #                  start_time=t.start_time, end_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
                     image_id = t.track_id
                     save_folder = datetime.now().strftime("%Y-%m-%d-%H")
                     if not os.path.exists(os.path.join('temp', save_folder)):
@@ -458,9 +450,11 @@ def run(
                         upload_files(best_image_temp_path, best_image_path)
                         upload_files(large_image_temp_path, large_image_path)
                     npy_file.append({'track_id':t.track_id, 'max_score':str(t.max_score), 'max_size':str(t.max_size),
-                                     'best_image':best_image_path, 'large_image':large_image_path, 'frame_idx':frame_idx, 
-                                     'start_time': t.start_time, 'end_time':datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 
-                                     'trajectory': t.trajectory, 'camera_id': camera_list[i]})
+                                        'best_image_path':best_image_path, 'large_image_path':large_image_path, 
+                                        'best_image': t.best_image, 'large_image': t.large_image,
+                                        'frame_idx': frame_idx, 
+                                        'start_time': t.start_time, 'end_time':datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 
+                                        'trajectory': t.trajectory, 'camera_id': camera_list[i]})
 
                     ################################
                     # add post function here/zwang #
@@ -548,6 +542,32 @@ def run(
     end_processing_time = time.time()
     LOGGER.info('Total processing time: {:.3f}s'.format(end_processing_time - start_processing_time))
     
+    LOGGER.info('')
+    
+    # add tracks that are still not removed to the queue
+    for i in range(len(tracker_list)):
+        removed_tracks = tracker_list[i].return_all_stracks()
+        for t in removed_tracks:
+            image_id = t.track_id
+            save_folder = datetime.now().strftime("%Y-%m-%d-%H")
+            if not os.path.exists(os.path.join('temp', save_folder)):
+                os.makedirs(os.path.join('temp', save_folder))
+            best_image_path = os.path.join(output_crops_s3_path, save_folder, f'{image_id}-best.jpg')
+            best_image_temp_path = os.path.join('temp', save_folder, f'{image_id}-best.jpg')
+            large_image_path = os.path.join(output_crops_s3_path, save_folder, f'{image_id}-large.jpg')
+            large_image_temp_path = os.path.join('temp', save_folder, f'{image_id}-large.jpg')
+            save_image_from_base64(t.best_image, best_image_temp_path)
+            save_image_from_base64(t.large_image, large_image_temp_path)
+            if upload_to_s3:
+                upload_files(best_image_temp_path, best_image_path)
+                upload_files(large_image_temp_path, large_image_path)
+            npy_file.append({'track_id':t.track_id, 'max_score':str(t.max_score), 'max_size':str(t.max_size),
+                                'best_image_path':best_image_path, 'large_image_path':large_image_path, 
+                                'best_image': t.best_image, 'large_image': t.large_image,
+                                'frame_idx': frame_idx, 
+                                'start_time': t.start_time, 'end_time':datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 
+                                'trajectory': t.trajectory, 'camera_id': camera_list[i]})
+
     # save vid_writer file to s3
     for vid in vid_writer:
         # video_path = vid.filename
@@ -583,6 +603,7 @@ def parse_opt():
     parser.add_argument('--local-mode', default=False, action='store_true', help='update all models')
     parser.add_argument('--use-local-json-file', default=False, action='store_true', help='use local json file')
     parser.add_argument('--save-to-numpy-sample', default=False, action='store_true', help='save trajectory to npy file')
+    parser.add_argument('--save-vid', action='store_true', help='save video tracking results')
     # following arguments only works in local mode is True
     parser.add_argument('--show-vid', default=False, action='store_true', help='display tracking video results')
     parser.add_argument('--source', type=str, default='0', help='file/dir/URL/glob, 0 for webcam')  
@@ -596,7 +617,6 @@ def parse_opt():
     # parser.add_argument('--save-txt', action='store_true', help='save results to *.txt')
     # parser.add_argument('--save-conf', action='store_true', help='save confidences in --save-txt labels')
     # parser.add_argument('--save-crop', action='store_true', help='save cropped prediction boxes')
-    # parser.add_argument('--save-vid', action='store_true', help='save video tracking results')
     # parser.add_argument('--nosave', action='store_true', help='do not save images/videos')
     # class 0 is person, 1 is bycicle, 2 is car... 79 is oven
     # parser.add_argument('--classes', nargs='+', type=int, help='filter by class: --classes 0, or --classes 0 2 3')
@@ -708,6 +728,7 @@ if __name__ == "__main__":
         default_server_opt['upload_to_s3'] = False
         default_server_opt['use_local_json_file'] = opt['use_local_json_file']
         default_server_opt['save_to_numpy_sample'] = opt['save_to_numpy_sample']
+        default_server_opt['save_vid'] = opt['save_vid']
         default_server_opt['use_single_file_s3'] = False
         default_server_opt['task_id'] = 'local_task'
         opt = default_server_opt

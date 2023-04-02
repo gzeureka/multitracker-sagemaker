@@ -15,7 +15,7 @@ python track.py --local-mode  --show-vid  --source abc.mp4
 ```
 for local multiple camera inference
 ```
-python track.py --local-mode  --show-vid --use-local-json-file --save-to-numpy-sample  --source ./local_test_2.json
+python track.py --local-mode  --show-vid --save-vid --use-local-json-file --save-to-numpy-sample  --source ./local_test_2.json
 ```
 ### Sagemaker Notebook Server
 Sagemaker Notebook Server mode is for deployment on sagemaker, and read & write files to S3. For further instruction, plz send us a ticket for more details. The follow should be run in order to start the server mode

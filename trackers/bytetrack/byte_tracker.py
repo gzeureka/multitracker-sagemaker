@@ -254,6 +254,10 @@ class BYTETracker(object):
         self.max_time_lost = self.buffer_size
         self.kalman_filter = KalmanFilter()
 
+    def return_all_stracks(self):
+        all_stracks = joint_stracks(self.tracked_stracks, self.lost_stracks)
+        return all_stracks
+
     def update(self, dets, img):
         self.frame_id += 1
         activated_starcks = []
