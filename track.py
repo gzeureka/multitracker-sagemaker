@@ -216,7 +216,8 @@ def run(
         vid_stride=1,  # video frame-rate stride,
         save_to_numpy_sample=False, # save results to numpy as a sample for re-id
         use_single_file_s3=False, # using single file from s3
-        use_local_json_file=False, # using 
+        use_local_json_file=False, # using
+        use_local_camera=False, # using local camera 
         save_to_json_sample=False, # save results to json as a sample for re-id,
         output_video_s3_path = '', # output s3 bucket,
         output_crops_s3_path = '', # output s3 bucket
@@ -281,6 +282,13 @@ def run(
         except:
             LOGGER.error('loading json file failed')
             return
+    elif use_local_camera:
+        source_config = {'source': [{
+            "camera_id": "test-camera",
+            "url": '0',
+            "ip": "",
+            "floor_id": "test"}], 'type': 'stream'
+            }
     else:
         try:
             source_config = {'source': [{
@@ -603,6 +611,7 @@ def parse_opt():
     parser.add_argument('--local-mode', default=False, action='store_true', help='update all models')
     parser.add_argument('--use-local-json-file', default=False, action='store_true', help='use local json file')
     parser.add_argument('--save-to-numpy-sample', default=False, action='store_true', help='save trajectory to npy file')
+    parser.add_argument('--use-local-camera', default=False, action='store_true', help='using local camera, does not work when use-local-json-file is enabled')
     parser.add_argument('--save-vid', action='store_true', help='save video tracking results')
     # following arguments only works in local mode is True
     parser.add_argument('--show-vid', default=False, action='store_true', help='display tracking video results')
@@ -649,6 +658,7 @@ def invocation():
     opt['conf_thres'] = float(data.get('conf_thres', 0.55))
     opt['iou_thres'] = float(data.get('iou_thres', 0.45))
     opt['use_local_json_file'] = bool(data.get('use_local_json_file', False))
+    opt['use_local_camera'] = bool(data.get('use_local_camera', False))
     opt['source'] = data.get('source', './local_test.json')
     opt['vid_stride'] = int(data.get('vid_stride', 1))
     opt['tracking_method'] = data.get('tracking_method', 'bytetrack')
@@ -709,6 +719,7 @@ default_server_opt = {
         'use_local_json_file': True,
         'use_single_file_s3': False,
         'save_to_json_sample': False,
+        'use_local_camera': False,
         'vid_stride': 1,
         'output_video_s3_path': 's3://abc/',
         'output_crops_s3_path': 's3://abc/',
@@ -727,6 +738,7 @@ if __name__ == "__main__":
         default_server_opt['source'] = opt['source']
         default_server_opt['upload_to_s3'] = False
         default_server_opt['use_local_json_file'] = opt['use_local_json_file']
+        default_server_opt['use_local_camera'] = opt['use_local_camera']
         default_server_opt['save_to_numpy_sample'] = opt['save_to_numpy_sample']
         default_server_opt['save_vid'] = opt['save_vid']
         default_server_opt['use_single_file_s3'] = False
