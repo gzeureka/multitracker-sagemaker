@@ -10,20 +10,22 @@ This repo is a reorganized version for people tracking, based on Yolov5 + ByteTr
 ### config.yaml
 config.yaml file notes the configurations for reid on cloud, including [TBD]
 
-## Two inference modes:
-### Local Test
-In this mode, track.py does people tracking on an local file and gives output (mp4, json) in ./runs/exp[last epoch] and visualize bounding boxes and tracks. First, install requirements.
+## Inference Modes:
+First, install requirements.
 ```
 pip install -r requirements.txt
 ```
-then start local inference
+### Single Source Test
+Track.py does people tracking on an local file and gives output (mp4, json) in ./runs/exp[last epoch] and visualize bounding boxes and tracks. Start local inference on one file:
 ```
 python track.py --local-mode  --show-vid  --source abc.mp4
 ```
-for multiple camera from video file inference
+### Multiple Source Test
+for multiple camera from video file inference, edit source json file, specify whether it is video_file or stream 
 ```
 python track.py --local-mode  --show-vid --save-vid --use-local-json-file --save-to-numpy-sample  --source ./local_test_2.json
 ```
+### Local Camera Test
 for single local camera (mac cameras tested) inference
 ```
 python track.py --local-mode --use-local-camera --show-vid --save-vid --save-to-numpy-sample
