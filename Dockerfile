@@ -28,5 +28,10 @@ COPY . /usr/src/app
 
 # Set environment variables
 ENV OMP_NUM_THREADS=8
+# RUN mkdir ~/bin
+# RUN echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc
+# RUN echo 'python3 track.py' > ~/bin/serve
+# RUN chmod +x ~/bin/serve
+# RUN source ~/.bashrc
 
-ENTRYPOINT ["python", "track.py"]
+ENTRYPOINT ["python", "track.py", "--local-mode", "--use-local-camera", "--show-vid", "--save-vid"]
