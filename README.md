@@ -1,4 +1,11 @@
 # Multi-Camera Tracking for Yolov5 + ByteTrack, with S3 exporting support
+## Features:
+This repo is a reorganized version for people tracking, based on Yolov5 + ByteTrack, features currently supported are the following:
+1. multiple real-time streams / multple video files / local cameras inference support
+2. detail export for each track (track_id, best_image in base64, large_image in base64, start_time, end_time, trajectory, camera_id in coordinates, etc.)
+3. Closure of unfinished tracks support
+4. Upload images, trajectory info to S3 support
+5. Visualization enhanced - support trajectory visualization
 
 ### config.yaml
 config.yaml file notes the configurations for reid on cloud, including [TBD]
@@ -29,4 +36,4 @@ python track.py
 Send requests to process files on S3
 
 ### TO-DOs
-1. terminate tracks that are still alive when video stops
+None
