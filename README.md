@@ -13,6 +13,12 @@ config.yaml file notes the configurations for reid on cloud, including [TBD]
 ## Inference Modes:
 First, install requirements.
 ```
+# assume we are in multitracker-sagemaker directory
+python3 -m venv .
+source bin/activate
+pip install Cython
+pip install numpy
+pip install scikit-build
 pip install -r requirements.txt
 ```
 ### Single Source Test
