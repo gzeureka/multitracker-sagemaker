@@ -19,6 +19,7 @@ source bin/activate
 pip install Cython
 pip install numpy
 pip install scikit-build
+pip install flask
 pip install -r requirements.txt
 ```
 ### Single Source Test
