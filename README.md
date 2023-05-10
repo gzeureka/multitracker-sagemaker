@@ -17,7 +17,7 @@ First, install requirements.
 python3 -m venv .
 source bin/activate
 pip install Cython
-pip install numpy
+pip install numpy==1.23.5
 pip install scikit-build
 pip install flask
 pip install -r requirements.txt
