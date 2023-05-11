@@ -10,18 +10,49 @@ This repo is a reorganized version for people tracking, based on Yolov5 + ByteTr
 ### config.yaml
 config.yaml file notes the configurations for reid on cloud, including [TBD]
 
+
+## Start an EC2 instance running Ubuntu in your aws account using the following CloudFormation Template
+https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create/template?stackName=arm-ec2-instance&templateURL=https://eric-panorama-test-utility.s3.amazonaws.com/test-utility-env-setup/ec2-instance-panorama.yml
+
+### clone this repo to your EC2 instance
+
 ## Inference Modes:
-First, install requirements.
+Install requirements.
 ```
-# assume we are in multitracker-sagemaker directory
-python3 -m venv .
-source bin/activate
+# Install pyenv
+curl https://pyenv.run | bash
+
+# Notice: use Python 3.10.11. Python 3.11 doesn't work
+# Use pyenv to install Python 3.10.11 and create a virtualenv for this project
+pyenv install 3.10.11
+pyenv virtualenv 3.10.11 multitracker-sagemaker
+pyenv local multitracker-sagemaker
+
+# Install packages
 pip install Cython
+# Install numpy. Notice: numpy 1.18.5 doesn't work, numpy 1.24.0 doesn't work
 pip install numpy==1.23.5
 pip install scikit-build
 pip install flask
+
+# Change current directory to multitracker-sagemaker
 pip install -r requirements.txt
 ```
+
+### Enable X11Forwaring for Ubuntu
+refer to https://wiki.archlinux.org/title/OpenSSH#X11_forwarding
+
+### (Optional)If you are using macOS ssh to your Ubuntu, you need to install xQuartz on macOS
+```brew install --cask xquartz```
+Then run XQuartz on macOS.
+
+Open a terminal, run
+```
+export DISPLAY=:0
+ssh -X -i "PATH-TO-YOUR-PEM-FILE" ubuntu@YOUR-EC2-IP-ADDRESS
+
+```
+
 ### Single Source Test
 Track.py does people tracking on an local file and gives output (mp4, json) in ./runs/exp[last epoch] and visualize bounding boxes and tracks. Start local inference on one file:
 ```
