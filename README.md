@@ -16,7 +16,7 @@ https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/crea
 
 ### clone this repo to your EC2 instance
 
-## Install requirements.
+## Install requirements
 ```
 # Install pyenv
 curl https://pyenv.run | bash
