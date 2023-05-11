@@ -16,8 +16,7 @@ https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/crea
 
 ### clone this repo to your EC2 instance
 
-## Inference Modes:
-Install requirements.
+## Install requirements.
 ```
 # Install pyenv
 curl https://pyenv.run | bash
@@ -53,6 +52,7 @@ ssh -X -i "PATH-TO-YOUR-PEM-FILE" ubuntu@YOUR-EC2-IP-ADDRESS
 
 ```
 
+## Inference Modes:
 ### Single Source Test
 Track.py does people tracking on an local file and gives output (mp4, json) in ./runs/exp[last epoch] and visualize bounding boxes and tracks. Start local inference on one file:
 ```
