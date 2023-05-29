@@ -25,6 +25,8 @@ curl https://pyenv.run | bash
 # Use pyenv to install Python 3.10.11 and create a virtualenv for this project
 pyenv install 3.10.11
 pyenv virtualenv 3.10.11 multitracker-sagemaker
+
+# Clone this repository, change current directory to multitracker-sagemaker, then run:
 pyenv local multitracker-sagemaker
 
 # Install packages
