@@ -42,10 +42,13 @@ pip install -r requirements.txt
 
 ### Enable X11Forwaring for Ubuntu
 refer to https://wiki.archlinux.org/title/OpenSSH#X11_forwarding
+```
+sudo apt-get install xorg
+```
 
 ### (Optional)If you are using macOS ssh to your Ubuntu, you need to install xQuartz on macOS
 ```brew install --cask xquartz```
-Then run XQuartz on macOS.
+Then run XQuartz app on macOS.
 
 Open a terminal, run
 ```
