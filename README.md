@@ -16,17 +16,18 @@ https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/crea
 
 ### clone this repo to your EC2 instance
 
-## Install requirements
+## Login to you EC2 Instance and install requirements
 ```
 # Install pyenv
 curl https://pyenv.run | bash
+# Modify ~/.bashrc according to the upper command's output and relogin
 
 # Notice: use Python 3.10.11. Python 3.11 doesn't work
 # Use pyenv to install Python 3.10.11 and create a virtualenv for this project
 pyenv install 3.10.11
 pyenv virtualenv 3.10.11 multitracker-sagemaker
 
-# Clone this repository, change current directory to multitracker-sagemaker, then run:
+# Change current directory to multitracker-sagemaker (your clone repo's directory), then run:
 pyenv local multitracker-sagemaker
 
 # Install packages
