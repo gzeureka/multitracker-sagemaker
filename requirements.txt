@@ -1,45 +1,70 @@
 # pip install -r requirements.txt
 
 # Base ----------------------------------------
+# GitPython is a python library used to interact with Git repositories
 gitpython
+# AWS SDK for Python
 boto3
+# Image processing in Python
 scikit-image
+# IPython provides a rich architecture for interactive computing
 ipython  # interactive notebook
+# Python plotting package
 matplotlib>=3.2.2
+# Scientific computing with Python
 numpy>=1.18.5
+# Pre-built CPU-only OpenCV packages for Python
 opencv-python==4.5.5.64
+# Python Imaging Library (Fork)
 Pillow>=7.1.2
+# Cross-platform lib for process and system monitoring in Python
 psutil  # system resources
+# YAML parser and emitter for Python
 PyYAML>=5.3.1
+# Python HTTP for Humans
 requests>=2.23.0
+# Scientific Library for Python
 scipy>=1.4.1
+# A tool to count the FLOPs of PyTorch model
 thop>=0.1.1  # FLOPs computation
+# Tensors and Dynamic neural networks in Python with strong GPU acceleration
 torch>=1.7.0  # see https://pytorch.org/get-started/locally (recommended)
+# Image and video datasets and models for torch deep learning
 torchvision>=0.8.1
+# A Fast, Extensible Progress Bar for Python and CLI
 tqdm>=4.64.0
 
 # protobuf<=3.20.1  # https://github.com/ultralytics/yolov5/issues/8012
 
 # Logging ---------------------------------------------------------------------
+# TensorBoard lets you watch Tensors Flow
 tensorboard>=2.4.1
 # clearml>=1.2.0
 # comet
 
 # Plotting --------------------------------------------------------------------
+# Powerful data structures for data analysis, time series, and statistics
 pandas>=1.1.4
+
+#Statistical data visualization
 seaborn>=0.11.0
 
 # StrongSORT ------------------------------------------------------------------
+# Access dict values as attributes (works recursively)
 easydict
 
 # torchreid -------------------------------------------------------------------
+# Google Drive direct download of big files
 gdown
 
 # ByteTrack -------------------------------------------------------------------
+# Linear Assignment Problem solver (LAPJV/LAPMOD)
 lap
 # git+git://github.com/samson-wang/cython_bbox.git@9badb346a9222c98f828ba45c63fe3b7f2790ea2
+# cython_bbox is widely used in object detection tasks
 cython_bbox
 # OCSORT ----------------------------------------------------------------------
+# Kalman filtering and optimal estimation library
 filterpy
 
 # Export ----------------------------------------------------------------------
