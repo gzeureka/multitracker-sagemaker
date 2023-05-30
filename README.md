@@ -14,7 +14,7 @@ config.yaml file notes the configurations for reid on cloud, including [TBD]
 ## Start an EC2 instance running Ubuntu in your aws account using the following CloudFormation Template
 https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create/template?stackName=arm-ec2-instance&templateURL=https://eric-panorama-test-utility.s3.amazonaws.com/test-utility-env-setup/ec2-instance-panorama.yml
 
-### clone this repo to your EC2 instance
+## Clone this repo to your EC2 instance
 
 ## Login to you EC2 Instance and install requirements
 ```
